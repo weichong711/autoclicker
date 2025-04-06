@@ -5,20 +5,21 @@ import pyautogui
 import threading
 import time
 
+# Global control flag
 clicking = False
 targets = [(0, 0)] * 4
 
-# Function to update target coordinates
-def update_targets(coords):
-    for i in range(4):
-        try:
-            x = int(coords[f'x{i}'])
-            y = int(coords[f'y{i}'])
-            targets[i] = (x, y)
-        except ValueError:
-            targets[i] = (0, 0)
+# Session state setup
+if 'coords' not in st.session_state:
+    st.session_state.coords = [{'x': 0, 'y': 0} for _ in range(4)]
 
-# Click loop running in background
+def update_targets():
+    for i in range(4):
+        x = st.session_state.coords[i]['x']
+        y = st.session_state.coords[i]['y']
+        targets[i] = (x, y)
+
+# Clicking loop
 def click_loop():
     global clicking
     while clicking:
@@ -29,38 +30,42 @@ def click_loop():
             pyautogui.click()
             time.sleep(0.01)
 
-# Start clicking thread
-def start_clicking(coords):
+# Start clicking
+def start_clicking():
     global clicking
     if not clicking:
-        update_targets(coords)
+        update_targets()
         clicking = True
-        thread = threading.Thread(target=click_loop, daemon=True)
-        thread.start()
+        threading.Thread(target=click_loop, daemon=True).start()
 
 # Stop clicking
 def stop_clicking():
     global clicking
     clicking = False
 
-# Streamlit GUI
-st.title("4-Target AutoClicker (Streamlit Version)")
+# Capture mouse position for a specific index
+def capture_position(i):
+    x, y = pyautogui.position()
+    st.session_state.coords[i]['x'] = x
+    st.session_state.coords[i]['y'] = y
+    st.experimental_rerun()  # Refresh the UI to show updated values
 
-coords = {}
+# UI
+st.title("🖱️ 4-Target AutoClicker (with Position Picker)")
+
 for i in range(4):
-    st.subheader(f"Target {i+1}")
-    col1, col2 = st.columns(2)
-    coords[f'x{i}'] = col1.number_input(f"X{i+1}", value=0, step=1, key=f'x{i}')
-    coords[f'y{i}'] = col2.number_input(f"Y{i+1}", value=0, step=1, key=f'y{i}')
+    st.subheader(f"🎯 Target {i + 1}")
+    col1, col2, col3 = st.columns([1, 1, 2])
+    st.session_state.coords[i]['x'] = col1.number_input(f"X{i+1}", value=st.session_state.coords[i]['x'], step=1, key=f"x{i}")
+    st.session_state.coords[i]['y'] = col2.number_input(f"Y{i+1}", value=st.session_state.coords[i]['y'], step=1, key=f"y{i}")
+    col3.button(f"📍 Pick Current Position", key=f"btn{i}", on_click=capture_position, args=(i,))
 
-# Start/Stop buttons
-start = st.button("Start Clicking")
-stop = st.button("Stop Clicking")
-
-if start:
-    start_clicking(coords)
+st.markdown("---")
+col_start, col_stop = st.columns(2)
+if col_start.button("✅ Start Clicking"):
+    start_clicking()
     st.success("Clicking started!")
 
-if stop:
+if col_stop.button("🛑 Stop Clicking"):
     stop_clicking()
     st.warning("Clicking stopped.")
