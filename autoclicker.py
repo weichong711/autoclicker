@@ -1,96 +1,66 @@
-import tkinter as tk
+# streamlit_autoclicker.py
+
+import streamlit as st
 import pyautogui
 import threading
 import time
-import keyboard
-import mouse  # new dependency for detecting mouse click
 
 clicking = False
 targets = [(0, 0)] * 4
 
-def update_target(index):
-    try:
-        x = int(entries_x[index].get())
-        y = int(entries_y[index].get())
-        targets[index] = (x, y)
-    except ValueError:
-        pass
-
-def start_clicking():
-    global clicking
-    clicking = True
+# Function to update target coordinates
+def update_targets(coords):
     for i in range(4):
-        update_target(i)
-    threading.Thread(target=click_loop, daemon=True).start()
+        try:
+            x = int(coords[f'x{i}'])
+            y = int(coords[f'y{i}'])
+            targets[i] = (x, y)
+        except ValueError:
+            targets[i] = (0, 0)
 
-def stop_clicking():
-    global clicking
-    clicking = False
-
-def toggle_clicking():
-    global clicking
-    if clicking:
-        stop_clicking()
-        print("Autoclicker stopped.")
-    else:
-        start_clicking()
-        print("Autoclicker started.")
-
+# Click loop running in background
 def click_loop():
+    global clicking
     while clicking:
         for x, y in targets:
             if not clicking:
                 break
             pyautogui.moveTo(x, y)
             pyautogui.click()
-            time.sleep(0.01)  # Changed to 10 ms (0.01 sec)
+            time.sleep(0.01)
 
-def pick_location(index):
-    def capture_click():
-        print(f"Waiting for screen click for Target {index+1}...")
-        mouse.wait(button='left', target_types=('down',))
-        x, y = pyautogui.position()
-        entries_x[index].delete(0, tk.END)
-        entries_x[index].insert(0, str(x))
-        entries_y[index].delete(0, tk.END)
-        entries_y[index].insert(0, str(y))
-        print(f"Captured Target {index+1} at: ({x}, {y})")
-        root.deiconify()
+# Start clicking thread
+def start_clicking(coords):
+    global clicking
+    if not clicking:
+        update_targets(coords)
+        clicking = True
+        thread = threading.Thread(target=click_loop, daemon=True)
+        thread.start()
 
-    root.withdraw()  # Hide the app window
-    threading.Thread(target=capture_click, daemon=True).start()
+# Stop clicking
+def stop_clicking():
+    global clicking
+    clicking = False
 
-def listen_hotkey():
-    keyboard.add_hotkey('f6', toggle_clicking)  # Changed hotkey to F6
-    keyboard.wait()
+# Streamlit GUI
+st.title("4-Target AutoClicker (Streamlit Version)")
 
-# GUI Setup
-root = tk.Tk()
-root.title("4-Target Autoclicker (F6 to Start/Stop)")
-
-entries_x = []
-entries_y = []
-
+coords = {}
 for i in range(4):
-    tk.Label(root, text=f"Target {i+1} X:").grid(row=i, column=0)
-    entry_x = tk.Entry(root, width=7)
-    entry_x.insert(0, "0")
-    entry_x.grid(row=i, column=1)
-    entries_x.append(entry_x)
+    st.subheader(f"Target {i+1}")
+    col1, col2 = st.columns(2)
+    coords[f'x{i}'] = col1.number_input(f"X{i+1}", value=0, step=1, key=f'x{i}')
+    coords[f'y{i}'] = col2.number_input(f"Y{i+1}", value=0, step=1, key=f'y{i}')
 
-    tk.Label(root, text=f"Y:").grid(row=i, column=2)
-    entry_y = tk.Entry(root, width=7)
-    entry_y.insert(0, "0")
-    entry_y.grid(row=i, column=3)
-    entries_y.append(entry_y)
+# Start/Stop buttons
+start = st.button("Start Clicking")
+stop = st.button("Stop Clicking")
 
-    btn_pick = tk.Button(root, text="Pick Location", command=lambda i=i: pick_location(i))
-    btn_pick.grid(row=i, column=4)
+if start:
+    start_clicking(coords)
+    st.success("Clicking started!")
 
-tk.Button(root, text="Start Clicking", command=start_clicking).grid(row=5, column=0, columnspan=2)
-tk.Button(root, text="Stop Clicking", command=stop_clicking).grid(row=5, column=2, columnspan=2)
-
-# Start hotkey listener
-threading.Thread(target=listen_hotkey, daemon=True).start()
-
-root.mainloop()
+if stop:
+    stop_clicking()
+    st.warning("Clicking stopped.")
